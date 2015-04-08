@@ -35,6 +35,83 @@ string int2str(int n)
 int global_sp_id = 0;
 int max_sp_stack_top = 0;
 
+bool compare_position(position_t *p1, position_t *p2) {
+/*
+  uint8 board_[256];
+  uint8 *board;
+  list_t piece_list[256];
+  move_t last_move;
+  int ep_square;
+  int castle_flags;
+  int rule50;
+  int gply;
+  int side, xside;
+  int piece_count[2][8];
+  int material[2];
+  int psq[2];
+  int check, check_sqs[2];
+  uint64 key, pkey, previous_keys[MAX_GAME_LENGTH];
+
+ */
+	int i, j;
+	for (i = 0; i < 256; i++) {
+		if (p1->board_[i] != p2->board_[i]) {
+			return false;
+		}
+	}
+
+	//if (p1->last_move != p2->last_move) {
+	//	return false;
+	//}
+
+	if (p1->ep_square != p2->ep_square) {
+		return false;
+	}
+
+	if (p1->castle_flags != p2->castle_flags) {
+		return false;
+	}
+
+	if (p1->side != p2->side) {
+		return false;
+	}
+	if (p1->xside != p2->xside) {
+		return false;
+	}
+
+	for (i = 0; i < 2; i++) {
+		for (j = 0; j < 8; j++) {
+			if (p1->piece_count[i][j] != p2->piece_count[i][j]) {
+				return false;
+			}
+		}
+	}
+
+
+	if (p1->check != p2->check) {
+		return false;
+	}
+
+	for (i = 0; i < 2; i++) {
+		if (p1->check_sqs[i] != p2->check_sqs[i]) {
+			return false;
+		}
+	}
+
+	for (i = 0; i < 256; i++) {
+		if ((p1->piece_list[i].n != p2->piece_list[i].n) ||
+			(p1->piece_list[i].p != p2->piece_list[i].p)) {
+			for (i = 0; i < 256; i++) {
+				cout << i << ": " << (int)(p2->piece_list[i].p)  <<" "<<  (int)(p2->piece_list[i].n) << "  ";
+				cout << (int)(p1->piece_list[i].p) <<" "<< (int)(p1->piece_list[i].n)<< endl;
+			}
+			return false;
+		}
+	}
+
+	return true;
+}
+
 
 void pop_next_task(split_point_t &sp, search_task_t &task)
 {
@@ -51,6 +128,7 @@ void pop_next_task(split_point_t &sp, search_task_t &task)
 		task.move_to_search = lmove;
 		task.depth = sp.depth;
 		task.src_host_id = sp.master;
+		task.task_type = TASK_END;
 		return;
 	} else {
 		do {
@@ -61,6 +139,7 @@ void pop_next_task(split_point_t &sp, search_task_t &task)
 				task.move_to_search = lmove;
 				task.depth = sp.depth;
 				task.src_host_id = sp.master;
+				task.task_type = TASK_SEARCH;
 				return;
 			}
 		} while (sp.current < sp.end);
@@ -70,6 +149,7 @@ void pop_next_task(split_point_t &sp, search_task_t &task)
 	lmove = 0;
 	task.move_to_search = lmove;
 	task.depth = sp.depth;
+	task.task_type = TASK_END;
 }
 
 // return the number of remaining tasks in this split point 
@@ -171,7 +251,15 @@ void host_t::host_idle_loop(split_point_t &sp)
 	int n_message;
 	split_point_t *sp_pointer;
 	sp_pointer = &sp;
+	uint32_t wait_cnt = 0;
+/*
+	if (sp_pointer != NULL) {
+		if (status == HOST_IDLE) {
+			logf << "[" << host_id <<"] Wire status: " <<status <<  endl;
+		}
 
+	}
+*/
 	while (true) {
 		if (status == HOST_IDLE) {
 			// no message
@@ -258,11 +346,13 @@ void host_t::host_idle_loop(split_point_t &sp)
 			*/
 
 			if (sp_pointer != NULL) { // I am a master
+				/*
 				vector<int> other_hosts;
 				for (hid = 0; hid < n_host; hid++) {
 					if (hid != host_id) {  //&&
 						//!contains_helper_host(hid)) {
-						if (contains_running_helper_host(hid)) {
+						//if (contains_running_helper_host(hid)) {
+						if (sp.slaves[hid] > 0) {
 							other_hosts.push_back(hid);
 						}
 					}
@@ -277,7 +367,6 @@ void host_t::host_idle_loop(split_point_t &sp)
 							//assert(other_hosts);
 						}
 					}
-				//	break;
 				}
 
 				int rnd_idx = rand() % other_hosts.size();
@@ -289,6 +378,19 @@ void host_t::host_idle_loop(split_point_t &sp)
 				cout << "[" << host_id << "]'s help got reply!!!\n";
 
 				sleep_wait_for_message(rnd_help_needer);
+				//wait_for_offerhelp_respond(sp, rnd_help_needer);
+				 */
+
+				///
+				wait_cnt++;
+				for (hid = 0; hid < n_host; hid++) {
+					if (hid != host_id) {
+						if (sp.slaves[hid] > 0) {
+							cout << "(" << wait_cnt << ") Master is still waiting for [" << hid << "]!" << endl;
+						}
+					}
+					usleep(10000);
+				}
 
 			} else { // I am a slave
 
@@ -323,6 +425,7 @@ void host_t::host_idle_loop(split_point_t &sp)
 				cout << "[" << host_id << "]'s help got reply!!!\n";
 
 				sleep_wait_for_message(rnd_help_needer);
+				//wait_for_offerhelp_respond(sp, rnd_help_needer);
 			}
 
 		} else if (status == HOST_IS_WORK_WAIT) {
@@ -332,24 +435,28 @@ void host_t::host_idle_loop(split_point_t &sp)
 			cout <<  "-[" << host_id << "] Providing help!\n";
 
 			if (sp_pointer == NULL) { // master host do not need initialization
+				logf << "Init === [" << host_id << "] " << "waiting for init msg before === " << endl;
 				while (is_initialized == false) {
 					//cout << "-[" << host_id << "] " << "waiting for init msg before " << endl;
-					check_message(sp); // waiting for init msg
+					check_message(sp, my_master); // waiting for init msg
 					//cout << "-[" << host_id << "] " << "waiting for init msg after" << endl;
 				}
+				logf << "Init === [" << host_id << "] " << "waiting for init msg after === " << endl;
 			}
 
 
+			//status = HOST_RUNNING;
 
 			// work now!
 			cout << "-[" << host_id << "] " << "Begin to search!" << endl;
-			//if (status == HOST_IS_WORK_WAIT) { // if there is still work waiting...
+			if (status == HOST_RUNNING) { // if there is still work waiting...
 				share_search(sp);
-			//}
+				status = HOST_IDLE;
+			}
 			cout << " [" << host_id << "] " << " finished searching!" << endl;
 
 
-			status = HOST_IDLE;
+
 
 			cout << "-[" << host_id << "] searched nodes = " << total_searched_nodes << endl;
 
@@ -398,13 +505,15 @@ void host_t::Send(int dest,int message,void* data,int size) {
 void host_t::ISend(int dest,int message) {
 	logf << "ISend to " << dest << ": " << get_time() << " " << MSG_NAME[message] << endl;
 	logf.flush();
-	MPI_Isend(MPI_BOTTOM, 0, MPI_INT, dest, message, MPI_COMM_WORLD, &mpi_request);
+	//MPI_Isend(MPI_BOTTOM, 0, MPI_INT, dest, message, MPI_COMM_WORLD, &mpi_request);
+	MPI_Send(MPI_BOTTOM, 0, MPI_INT, dest, message, MPI_COMM_WORLD);
 }
 
 void host_t::ISend(int dest,int message,void* data,int size) {
 	logf << "ISend to " << dest << ": " << get_time() << " " << MSG_NAME[message] << endl;
 	logf.flush();
-	MPI_Isend(data, size, MPI_BYTE, dest, message, MPI_COMM_WORLD, &mpi_request);
+	//MPI_Isend(data, size, MPI_BYTE, dest, message, MPI_COMM_WORLD, &mpi_request);
+	MPI_Send(data, size, MPI_BYTE, dest, message, MPI_COMM_WORLD);
 }
 
 void host_t::Recv(int dest,int message) {
@@ -540,6 +649,7 @@ int host_t::check_message(split_point_t &sp, int source) // check messsge from p
 	int n_message = 0;
 	split_point_t *sp_pointer;
 	sp_pointer = &sp;
+	uint32_t wait_cnt = 0;
 
 	if (status == HOST_QUIT) {
 		return 0;
@@ -665,10 +775,13 @@ int host_t::check_message(split_point_t &sp, int source) // check messsge from p
 
 					if (contains_helper_host(hid)) {
 						cout << "[" << host_id << "] do not need help, because I have already accepted you, thanks!" << endl;
+						logf << "[" << host_id << "] do not need help, because I have already accepted you, thanks!" << endl;
 					} else if (all_works >= 4) {
 						cout << "[" << host_id << "] do not need help, because too many helpers, thanks!" << endl;
+						logf << "[" << host_id << "] do not need help, because too many helpers, thanks!" << endl;
 					} else if (status != HOST_RUNNING) {
 						cout << "[" << host_id << "] do not need help, becaue I am not busy, "<<status <<" thanks!" << endl;
+						logf << "[" << host_id << "] do not need help, becaue I am not busy, "<<status <<" thanks!" << endl;
 					}
 
 					ISend(hid, DECLINE);
@@ -709,11 +822,12 @@ int host_t::check_message(split_point_t &sp, int source) // check messsge from p
 
 				// init board
 				memcpy(&(parent_pos), &(init_msg.init_pos), sizeof(position_t));
+				parent_pos.board = parent_pos.board_ + 64;
 
 				cout << "init msg!" << endl;
 				// ===========
 				// change my status to "ready_to_work"
-				status = HOST_IS_WORK_WAIT;//HOST_REGISTER_WORK;
+				status = HOST_RUNNING; //HOST_IS_WORK_WAIT;//HOST_REGISTER_WORK;
 				is_initialized = true;
 				since_last_nodes = 0;
 				host_should_stop = false;
@@ -789,6 +903,7 @@ int host_t::check_message(split_point_t &sp, int source) // check messsge from p
 				MPI_Recv(MPI_BOTTOM,0,MPI_INT,source,message_id,MPI_COMM_WORLD,MPI_STATUS_IGNORE);
 				// quit
 				status = HOST_QUIT;
+				is_initialized = true;
 				mutex_unlock(&lock_mpi);
 /*
 				cout << "[" << host_id << "] searched nodes = " << total_searched_nodes << endl;
@@ -840,6 +955,104 @@ void host_t::sleep_wait_for_message(int source)
 		//	if (status == HOST_QUIT) return;
 		//}
 	}
+}
+
+int host_t::wait_for_offerhelp_respond(split_point_t &sp, int source)
+{
+	int flag;
+	int n_message = 0;
+	split_point_t *sp_pointer;
+	sp_pointer = &sp;
+
+	struct timeval tim;
+	//int start_time = gettimeofday(&tim, NULL);
+	int msg_id, src_hid;
+	int respond = -1;
+
+	do {
+		/*
+		 * Polling. MPI_Iprobe<->MPI_Recv is not thread safe.
+		 */
+		mutex_lock(&lock_mpi);
+		//MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &flag, &mpi_status);
+		MPI_Iprobe(source, MPI_ANY_TAG, MPI_COMM_WORLD, &flag, &mpi_status);
+
+
+		/*Message recieved?*/
+		if(flag) {
+			int message_id = mpi_status.MPI_TAG;
+			int source = mpi_status.MPI_SOURCE;
+
+			// write this to log file
+			logf << "Receive: " << get_time() << " " << MSG_NAME[message_id] << endl;
+
+			if (message_id == ACCHELP) {
+
+				MPI_Recv(MPI_BOTTOM,0,MPI_INT,source,message_id,MPI_COMM_WORLD,MPI_STATUS_IGNORE);
+				mutex_unlock(&lock_mpi);
+
+				//status = HOST_REGISTER_WORK;
+				status = HOST_IS_WORK_WAIT;
+				is_initialized = false;
+
+				my_master = source; // registed master id
+
+
+				respond = ACCHELP;
+				break;
+
+			} else if (message_id == DECLINE) {
+				MPI_Recv(MPI_BOTTOM,0,MPI_INT,source,message_id,MPI_COMM_WORLD,MPI_STATUS_IGNORE);
+				mutex_unlock(&lock_mpi);
+
+				//sp.cpus--;
+				//sp.slaves[source] = 0;
+				is_initialized = false;
+
+				my_master = -1; // registed master id
+
+				cout << "[" << host_id << "] " << "Host " << source << " declined the offerhelp request since it has been assigned a task!" << endl;
+
+				respond = DECLINE;
+				break;
+
+			} else if (message_id == QUIT) {
+				MPI_Recv(MPI_BOTTOM,0,MPI_INT,source,message_id,MPI_COMM_WORLD,MPI_STATUS_IGNORE);
+				// quit
+				status = HOST_QUIT;
+				mutex_unlock(&lock_mpi);
+				flag = 0;
+
+				is_initialized = true;
+				respond = QUIT;
+				break;
+
+			}
+			// number of
+			n_message++;
+			//cout << "Get message? " <<  n_message << endl;
+		} else {
+			mutex_unlock(&lock_mpi);
+			break;
+		}
+
+		// is it time to quit?
+		if (status == HOST_QUIT) {
+			break;
+		}
+
+/*
+		/// is it time out?
+		int end_time = gettimeofday(&tim, NULL);
+		int elpso_time = end_time - start_time;
+		if (elpso_time > (1000 * 100)) {
+			break; // time out!
+		}*/
+
+	} while(flag);
+
+
+	return respond;
 }
 
 bool host_t::idle_host_exist()
@@ -926,6 +1139,7 @@ void host_t::share_search(split_point_t &sp)
 	int task_type = -1;
 	int current_task_top = 0;
 	char move_name[16];
+	task_queue_t *task_queue_ptr;
 
 
 	cout << "[" << host_id << "] " << "Begin share search!" << endl;
@@ -933,27 +1147,33 @@ void host_t::share_search(split_point_t &sp)
 	//if (sp_ptr != NULL) { // I am master host!
 	host_should_stop = false;
 
-	task_queue.clear();
-
 	//}
 
 	do {
 
-		n_msg = check_message(sp);
+		if (sp_ptr != NULL) { // I am master host!
+			n_msg = check_message(sp);
+		} else {
+			n_msg = check_message(sp, my_master);
+		}
+
 		if (sp_ptr != NULL) { // I am master host!
 			pop_next_task(sp, task);
+			task_queue_ptr = &(sp.task_queu);
 
 			//if (task_left(sp)) {
 			if (task.move_to_search != 0) { // a legal move
 				// init pos
 				copy_position(&parent_pos, &(sp.parent_pos)); // pos
 				// get task from myself, rather than from message
-				task_queue.add_tail(task);
+				sp.task_queu.add_tail(task);
 				//task_stack[task_stack_top] = task; // push it into task stack
 				//task_stack_top++;
 			} else {
 				host_should_stop = true;
 			}
+		} else {
+			task_queue_ptr = &(task_queue);
 		}
 		//stop_current_task = host_should_stop;		
 
@@ -963,11 +1183,12 @@ void host_t::share_search(split_point_t &sp)
 		}
 
 		//while (!task_queue.is_empty()) {
-		if (!task_queue.is_empty()) {
+		if (!task_queue_ptr->is_empty()) {
 			// pop one task from task stack =====
 			copy_position(&pos, &(parent_pos)); // pos
+			init_piece_lists(&pos);
 			//int top_id = current_task_top; // task
-			task_queue.pop_head(task);//task = task_stack[top_id];
+			task_queue_ptr->pop_head(task);//task = task_stack[top_id];
 			task_type = task.task_type;
 			src_host_id = task.src_host_id;
 			//task_stack_top--; // pop!
@@ -977,19 +1198,7 @@ void host_t::share_search(split_point_t &sp)
 			cout << "[" << host_id << "] " << "pop out a move "<< string(move2str(task.move_to_search, movename)) << "!" << endl;
 
 
-
 			if (task_type == TASK_SEARCH) {
-				/*
-				// time to exit
-				if (sp_ptr != NULL) {
-					// I am master host!
-				} else {
-					cout << "[" << host_id << "] " << " has no candidate moves!\n";
-					//ISend(src_host_id, EXITHELP);
-				}
-				break;*/
-
-
 
 				// information in task
 				depth = task.depth;
@@ -1000,8 +1209,17 @@ void host_t::share_search(split_point_t &sp)
 
 				cout << "[" << host_id << "] " << "get a task! From spid = " << task.sp_id << endl;
 				cout << "[" << host_id << "] " << "Begin task content:" << endl;
-				position_to_fen(&pos, fen);
+
+				position_to_fen(&parent_pos, fen);
 				set_position(&pos, fen);
+				/*if (!compare_position(&pos, &parent_pos)) {
+					cerr << "Position inconsistent!" << endl;
+					cerr << fen << endl;
+					logf << "Position inconsistent!" << endl;
+					logf << fen << endl;
+					//usleep(1000 * 100);
+					//exit(0);
+				}*/
 				cout << "pos: " << fen << endl;
 				cout << "move_to_search = " << move2str(move_to_do, mvstr) << endl;
 				cout << "[" << host_id << "] " << "End task content." << endl;
@@ -1016,7 +1234,7 @@ void host_t::share_search(split_point_t &sp)
 					logf << "Task {" << endl;
 					logf << "  pos: " <<  fen << endl;
 					logf << "  move: " << move2str(move_to_do, mvstr) << endl;
-					logf << (int*)(pos.board_) << " " << (int*)(pos.board) << endl;
+					//logf << (int*)(pos.board_) << " " << (int*)(pos.board) << endl;
 					logf << "}" << endl;
 
 					//search();
@@ -1028,6 +1246,10 @@ void host_t::share_search(split_point_t &sp)
 					unmake_move(&pos, move_to_do, u);
 				} else {
 					this_task_nodes = 0x0ULL;
+					logf << "Task illegal {" << endl;
+					logf << "  pos: " <<  fen << endl;
+					logf << "  move: " << move2str(move_to_do, mvstr) << endl;
+					logf << "}" << endl;
 				}
 				// ===============================
 
@@ -1141,6 +1363,7 @@ bool host_t::try_split(const position_t *p, int ply, int depth, uint64 &nodes,
 	sp_pointer->moves = *moves;
 	sp_pointer->cpus = 0;
 	sp_pointer->nodes = nodes;
+	sp_pointer->task_queu.clear();
 	//split_point->parent_sstack = sstck;
 
 	logf << "spid(" << sp_pointer->sp_id << ") init nodes " << nodes << endl;
@@ -1155,9 +1378,6 @@ bool host_t::try_split(const position_t *p, int ply, int depth, uint64 &nodes,
 	for (i = 0; i < n_host; i++) {
 		//if (thread_is_available(i, master) || i == master) {
 		if (host_is_avaliable(i) || i == master) {
-			//copy_position(split_point->pos + i, p);
-			//memcpy(split_point->sstack[i], sstck, (ply+1)*sizeof(search_stack_t));
-			//Threads[i].split_point = split_point;
 			if (i != master) {
 				sp_pointer->slaves[i] = 1;
 			}
@@ -1212,7 +1432,7 @@ bool host_t::try_split(const position_t *p, int ply, int depth, uint64 &nodes,
 	// idle loop when all threads have finished their work at this split 
 	// point (i.e. when split_point->cpus == 0).
 
-
+/*
 	cout << "CPUs: " << sp_pointer->cpus << endl;
 	cout << "Master: " << sp_pointer->master << endl;
 	cout << "Slaves: ";
@@ -1221,7 +1441,19 @@ bool host_t::try_split(const position_t *p, int ply, int depth, uint64 &nodes,
 			cout << i << " ";
 		}
 	} cout << endl;
-
+*/
+	logf << "Split { " << endl;
+	logf << "  CPUs: " << sp_pointer->cpus << endl;
+	logf << "  Master: " << sp_pointer->master << endl;
+	logf << "  Stack_top: " << sp_stack_top << endl;
+	logf << "  Split_depth: " << sp_pointer->depth << endl;
+	logf << "  Slaves: ";
+	for (i = 0; i < n_host; i++) {
+		if (sp_pointer->slaves[i] > 0) {
+			logf << i << " ";
+		}
+	} logf << endl;
+	logf << "}" << endl;
 
 	cout << "start main loop!" << endl;
 	status = HOST_IS_WORK_WAIT;

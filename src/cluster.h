@@ -81,27 +81,7 @@ private:
 //	int my_host_id;
 //};
 
-struct search_task_t {
-	// split_point id
-	int sp_id;
 
-	// type? regular search or end of list?
-	int task_type;
-
-	// current position
-	position_t pos;
-
-	// move to search
-	move_t move_to_search;	
-
-	// depth
-	int depth, ply;
-	// value
-	int alpha, beta;
-
-	// other information
-	int src_host_id;
-};
 
 // message structure
 struct split_message_t {
@@ -177,23 +157,7 @@ extern string MSG_NAME[20];
 
 
 
-/////////////////////////////// task queue /////
-class task_queue_t {
-public:
-	search_task_t task_arr[256];
-	int queue_tail, current_head;
 
-
-	void pop_head(search_task_t &task);
-	void add_tail(search_task_t &task);
-	void get_tail(search_task_t &task);
-
-	bool is_empty();
-
-	void clear();
-
-};
-/////////////////////////////////////////////////
 
 class host_t {
 public:
@@ -259,6 +223,7 @@ public:
 	int check_message(split_point_t &sp);
 	int check_message(split_point_t &sp, int source);
 	void sleep_wait_for_message(int source);
+	int wait_for_offerhelp_respond(split_point_t &sp, int source);
 	//void host_status_msg(status_message_t&);
 	//void update_statustb(status_message_t &status_msg);
 

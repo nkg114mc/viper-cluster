@@ -420,6 +420,47 @@ struct root_search_info_t {
 };
 
 //#if defined(SMP)
+
+/////////////////////////////// task queue /////
+struct search_task_t {
+	// split_point id
+	int sp_id;
+
+	// type? regular search or end of list?
+	int task_type;
+
+	// current position
+	position_t pos;
+
+	// move to search
+	move_t move_to_search;
+
+	// depth
+	int depth, ply;
+	// value
+	int alpha, beta;
+
+	// other information
+	int src_host_id;
+};
+
+class task_queue_t {
+public:
+	search_task_t task_arr[256];
+	int queue_tail, current_head;
+
+
+	void pop_head(search_task_t &task);
+	void add_tail(search_task_t &task);
+	void get_tail(search_task_t &task);
+
+	bool is_empty();
+
+	void clear();
+
+};
+/////////////////////////////////////////////////
+
 struct split_point_t {
   int sp_id;
   position_t parent_pos;
@@ -436,6 +477,7 @@ struct split_point_t {
   move_stack_t *current, *end;
   volatile int moves;
   volatile int cpus;
+  task_queue_t task_queu;
 };
 //#else
 //typedef void split_point_t;

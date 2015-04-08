@@ -24,6 +24,11 @@ void init_position(position_t *pos) {
 void init_piece_lists(position_t *pos) {
   int sq, piece;
 
+  for(sq = 0; sq < 256; sq++) {
+	pos->piece_list[sq].n = 255;
+	pos->piece_list[sq].p = 255;
+  }
+
   for(piece = KING; piece >= KNIGHT; piece--) {
     PieceListStart(pos, piece) = piece-1+128;
     PieceListStart(pos, piece+8) = piece+7+128;
