@@ -4,6 +4,8 @@
    This software may be used freely so long as this copyright notice is
    left intact.  There is no warrantee on this software.
  */
+#ifdef _MSC_VER
+
 #include <windows.h>
 #include <time.h>
 #include "dos.h"
@@ -27,4 +29,4 @@ int             gettimeofday(struct timeval * tp, struct timezone * tzp)
     return 0;
 }
 
-
+#endif

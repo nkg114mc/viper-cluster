@@ -9,7 +9,7 @@
 #if defined(SMP)
 const int MaxNumOfThreads = 4;
 #else
-const int MaxNumOfThreads = 1;
+const int MaxNumOfThreads = 8;
 #endif
 
 
@@ -465,9 +465,11 @@ struct split_point_t {
   int sp_id;
   position_t parent_pos;
   position_t pos[MaxNumOfThreads];
+  char fen[256];
   search_stack_t sstack[MaxNumOfThreads][MAX_DEPTH];
   search_stack_t *parent_sstack;
   move_stack_t mstack[MaxNumOfThreads][MOVE_STACK_SIZE];
+  move_stack_t mstack2[256];
   int ply, depth;
   volatile uint64 nodes;
   volatile int alpha, beta, bestvalue;
@@ -477,7 +479,8 @@ struct split_point_t {
   move_stack_t *current, *end;
   volatile int moves;
   volatile int cpus;
-  task_queue_t task_queu;
+  //task_queue_t task_queu;
+  //bool helpful_master;
 };
 //#else
 //typedef void split_point_t;

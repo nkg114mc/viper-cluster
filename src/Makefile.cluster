@@ -30,7 +30,8 @@ OBJ = .o/data.o \
 	.o/uci.o \
 	.o/ucioption.o \
 	.o/zobrist.o \
-	.o/cluster.o
+	.o/cluster.o \
+	.o/manager.o
 
 viper: .o $(OBJ)
 	$(CC) $(CFLAGS) $(DEFINES) $(LDFLAGS) $(OBJ) -o viper -lm -lpthread

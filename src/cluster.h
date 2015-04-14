@@ -10,11 +10,12 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <mpi.h>
+#include <inttypes.h>
 
 #include "viper.h"
 #include "pthread.h"
-#include <mpi.h>
-#include <inttypes.h>
+
 
 
 
@@ -75,12 +76,12 @@ private:
 };
 */
 
-
-//struct status_table_t {
-//	int all_status[256];
-//	int my_host_id;
-//};
-
+/*
+struct status_table_t {
+	int all_status[256];
+	int my_host_id;
+};
+*/
 
 
 // message structure
@@ -89,13 +90,19 @@ struct split_message_t {
 	//int depth;
 	//split_point_t sp;
 	search_task_t task;
-	int src_host_id;
+	//int src_host_id;
+	int master_id;
+	int stack_top;
 	//int 
 };
 
 struct merge_message_t {
 	int message_id;
+
 	int src_host_id;
+	int master_id;
+	int stack_top;
+
 
 	// other values
 	uint64_t nodes;
@@ -110,7 +117,9 @@ struct merge_message_t {
 
 struct init_message_t {
 	int message_id;
-	position_t init_pos;
+	//position_t init_pos;
+	char fen[256];
+	int stack_top;
 	int master_id;
 	int sp_id;
 };
@@ -143,7 +152,8 @@ enum HOST_STATUS {
 };
 
 enum MESSAGE_TAG {
-	QUIT = 0,INIT,RELAX,HELP,CANCEL,SPLIT,MERGE,STATUS,PING,PONG,ABORT,DECLINE,OFFERHELP,NONEEDHELP, ACCHELP,EXITHELP
+	QUIT = 0,INIT,RELAX,HELP,CANCEL,SPLIT,MERGE,STATUS,PING,PONG,ABORT,DECLINE,OFFERHELP, ACCHELP,
+	SUBMIT_SPLIT, WRITEBACK_SPLIT, TRY_SPLIT
 };
 
 enum TASK_TYPE {
@@ -164,6 +174,7 @@ public:
 
 	// some property
 	int host_id;
+	int manager_id; // host manager id
 	int n_host;
 	int n_thread;
 
@@ -173,13 +184,13 @@ public:
 
 	// status
 	int status;
-	bool is_initialized;
+	//bool is_initialized;
 	//status_table_t status_table;// other hosts' status
 	vector<int> free_host_helpers;
 	vector<int> runing_host_helpers;
-	bool host_is_runing;
-	bool host_should_stop;
-	bool host_work_waiting;
+	//bool host_is_runing;
+	//bool host_should_stop;
+	//bool host_work_waiting;
 
 
 	// about mpi
@@ -187,17 +198,18 @@ public:
 	MPI_Request mpi_request;
 
 	// some local data
-	position_t parent_pos;
-	split_point_t active_sp;
+	//position_t parent_pos;
+	//char parent_fen[256];
+	//split_point_t active_sp;
 	split_point_t sp_stack[64];
 	int sp_stack_top;
 
 	// task stack
 	//int task_stack_top;
 	//search_task_t task_stack[128];
-	task_queue_t task_queue;
-	int my_master;
-	int working_sp_id;
+	//task_queue_t task_queue;
+	//int my_master;
+	//int working_sp_id;
 
 	// about search
 	uint64_t total_searched_nodes;
@@ -218,10 +230,10 @@ public:
 
 
 	// communicate
-
 	void Non_Blocking_Send(int dest, int message);
-	int check_message(split_point_t &sp);
-	int check_message(split_point_t &sp, int source);
+	int check_message(split_point_t &sp, bool &host_should_stop, task_queue_t &task_queue, char *fenstr);
+	int check_message(split_point_t &sp, int source, bool &host_should_stop, task_queue_t &task_queue, char *fenstr);
+	int wait_split_apply_response(int source);
 	void sleep_wait_for_message(int source);
 	int wait_for_offerhelp_respond(split_point_t &sp, int source);
 	//void host_status_msg(status_message_t&);
@@ -251,13 +263,13 @@ public:
 	void host_idle_loop(split_point_t& sp);
 	bool idle_host_exist();
 	bool host_is_avaliable(int hid);
-
 	bool try_split(const position_t *p, int ply, int depth, uint64 &nodes,
-	               int *moves, move_stack_t *current, move_stack_t *end, int master);
+	               int *moves, move_stack_t *mstack, move_stack_t *current, move_stack_t *end, int master);
 	bool cluster_split(const position_t *p, search_stack_t *sstck, int ply, 
 	   int *alpha, int *beta, bool pvnode, int *bestvalue, int depth, 
 	   int *moves, move_stack_t *current, move_stack_t *end, int master);
 	void share_search(split_point_t &sp);
+	void share_search2(split_point_t &sp, task_queue_t &task_queue, char *fen, int master, int stack_top);
 	uint64 cluster_perft(split_point_t &sp, position_t &pos, int depth);
 
 
@@ -280,6 +292,14 @@ public:
 */
 
 };
+
+extern int global_sp_id;
+extern int max_sp_stack_top;
+
+extern void pop_next_task(split_point_t &sp, search_task_t &task);
+extern string int2str(int n);
+
+
 
 //extern host_t local_host;
 

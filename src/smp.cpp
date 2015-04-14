@@ -1,7 +1,7 @@
 #include "viper.h"
 
 thread_t Threads[MaxNumOfThreads];
-const int MaxActiveSplitPoints = 1;//8;
+const int MaxActiveSplitPoints = 8;
 
 #if defined(SMP)
 

@@ -2,6 +2,7 @@
 
 #include "viper.h"
 #include "cluster.h"
+#include "manager.h"
 
 
 
@@ -40,11 +41,13 @@ void print_pid()
 // host
 #if defined(USE_CLUSTER_SEARCH)
 host_t my_local_host;
+manager_t my_manager_host;
 #endif
 
 int main(int argc, char* argv[])
 {
-	int rank, size;
+	int rank = 0, size;
+	int number_of_hosts = 0;
 	int ierr, i, j;
 #if defined(USE_CLUSTER_SEARCH)
 	host_option_t host_opt;
@@ -56,6 +59,8 @@ int main(int argc, char* argv[])
 	//print("Process [%d/%d] on %s : pid %d\n",PROCESSOR::host_id,
 	//PROCESSOR::n_hosts,PROCESSOR::host_name, GETPID());
 	MPI_Status status;
+
+	number_of_hosts = size - 1;
 
 	// what's my pid?
 	print_pid();
@@ -103,8 +108,9 @@ int main(int argc, char* argv[])
 
 #if defined(USE_CLUSTER_SEARCH)
 		host_opt.host_id = rank;
-		host_opt.n_host  = size;
+		host_opt.n_host  = number_of_hosts;//size - 1;
 		host_opt.n_thread = 1;
+
 		// init host
 		my_local_host.initialize(host_opt);
 
@@ -115,17 +121,29 @@ int main(int argc, char* argv[])
 		uci_main_loop();
 #endif
 
-	//} else if (rank == (size)) {
+#if defined(USE_CLUSTER_SEARCH)
+
+	// manager host
+	} else if (rank == (number_of_hosts)) {
+
+		host_opt.host_id = rank;
+		host_opt.n_host  = number_of_hosts;//size - 1;
+		host_opt.n_thread = 1;
+		// init host
+		my_manager_host.initialize(host_opt);
+
+		// host begin to idle loop!
+		my_manager_host.manager_idle_loop();
 
 
 	// other processes
 	} else {
-#if defined(USE_CLUSTER_SEARCH)
+
 		split_point_t *empty_sp;
 		empty_sp = NULL;
 
 		host_opt.host_id = rank;
-		host_opt.n_host  = size - 1;
+		host_opt.n_host  = number_of_hosts;//size - 1;
 		host_opt.n_thread = 1;
 		// init host
 		my_local_host.initialize(host_opt);
