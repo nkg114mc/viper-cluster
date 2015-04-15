@@ -19,9 +19,6 @@
 
 
 
-#define MAX_SPLIT_THREAD 8
-#define MAX_SPLIT_HOST   8
-
 using namespace std;
 /*
 class split_point_t {
@@ -153,7 +150,7 @@ enum HOST_STATUS {
 
 enum MESSAGE_TAG {
 	QUIT = 0,INIT,RELAX,HELP,CANCEL,SPLIT,MERGE,STATUS,PING,PONG,ABORT,DECLINE,OFFERHELP, ACCHELP,
-	SUBMIT_SPLIT, WRITEBACK_SPLIT, TRY_SPLIT
+	SUBMIT_SPLIT, WRITEBACK_SPLIT, TRY_SPLIT, SPLIT_OPPORTU
 };
 
 enum TASK_TYPE {
@@ -184,32 +181,19 @@ public:
 
 	// status
 	int status;
+	int has_idle_host; // which means we can try split
 	//bool is_initialized;
 	//status_table_t status_table;// other hosts' status
 	vector<int> free_host_helpers;
 	vector<int> runing_host_helpers;
-	//bool host_is_runing;
-	//bool host_should_stop;
-	//bool host_work_waiting;
-
 
 	// about mpi
 	MPI_Status  mpi_status;
 	MPI_Request mpi_request;
 
 	// some local data
-	//position_t parent_pos;
-	//char parent_fen[256];
-	//split_point_t active_sp;
-	split_point_t sp_stack[64];
+	split_point_t sp_stack[MAX_SPLIT_HOST];
 	int sp_stack_top;
-
-	// task stack
-	//int task_stack_top;
-	//search_task_t task_stack[128];
-	//task_queue_t task_queue;
-	//int my_master;
-	//int working_sp_id;
 
 	// about search
 	uint64_t total_searched_nodes;
@@ -233,6 +217,7 @@ public:
 	void Non_Blocking_Send(int dest, int message);
 	int check_message(split_point_t &sp, bool &host_should_stop, task_queue_t &task_queue, char *fenstr);
 	int check_message(split_point_t &sp, int source, bool &host_should_stop, task_queue_t &task_queue, char *fenstr);
+	int check_split_opportunity();
 	int wait_split_apply_response(int source);
 	void sleep_wait_for_message(int source);
 	int wait_for_offerhelp_respond(split_point_t &sp, int source);

@@ -23,7 +23,8 @@ using namespace std;
 
 
 string MSG_NAME[20] = {
-  "QUIT","INIT","RELAX","HELP","CANCEL","SPLIT","MERGE","STATUS","PING","PONG","ABORT","DECLINE","OFFERHELP","ACCHELP", "SUBMIT_SPLIT", "WRITEBACK_SPLIT", "TRY_SPLIT"
+  "QUIT","INIT","RELAX","HELP","CANCEL","SPLIT","MERGE","STATUS","PING","PONG","ABORT",
+  "DECLINE","OFFERHELP","ACCHELP", "SUBMIT_SPLIT", "WRITEBACK_SPLIT", "TRY_SPLIT", "SPLIT_OPPORTU"
 };
 
 string int2str(int n)
@@ -194,6 +195,8 @@ void host_t::initialize(int hostId, int nHost, int nThread)
 
 	// some consts
 	status = HOST_IDLE;
+	has_idle_host = 1;
+
 	poll_peroid_nodes = 1000;
 	since_last_nodes = 0;
 	//host_is_runing = false;
@@ -564,6 +567,7 @@ void host_t::remove_running_helper_host(int hid) {
 }
 
 
+
 // return the number of message
 int host_t::check_message(split_point_t &sp, bool &host_should_stop, task_queue_t &task_queue, char *fenstr) {
 	return (check_message(sp, MPI_ANY_SOURCE, host_should_stop, task_queue, fenstr));
@@ -684,6 +688,14 @@ int host_t::check_message(split_point_t &sp, int source, bool &host_stop, task_q
 				running_msg.new_host_status = HOST_IDLE;
 				ISend(manager_id, STATUS, (void*)(&running_msg), sizeof(update_message_t));
 				
+
+			} else if (message_id == SPLIT_OPPORTU) {
+
+				MPI_Recv(MPI_BOTTOM,0,MPI_INT,source,message_id,MPI_COMM_WORLD,MPI_STATUS_IGNORE);
+				mutex_unlock(&lock_mpi);
+
+				has_idle_host = 1;
+
 			} else if (message_id == QUIT) {
 
 				MPI_Recv(MPI_BOTTOM,0,MPI_INT,source,message_id,MPI_COMM_WORLD,MPI_STATUS_IGNORE);
@@ -693,6 +705,7 @@ int host_t::check_message(split_point_t &sp, int source, bool &host_stop, task_q
 
 
 				///////////// show statistics ///////////////
+				usleep(5000 * (host_id + 1));
 				cout << "[" << host_id << "] searched nodes = " << total_searched_nodes << endl;
 				cout << "[" << host_id << "] split cnt = " << global_sp_id << endl;
 				cout << "[" << host_id << "] max_sp_stack_top = " << max_sp_stack_top << endl;
@@ -763,6 +776,14 @@ int host_t::wait_split_apply_response(int source) // check messsge from particul
 				//return (ACCHELP);
 				return 1;
 
+			} else if (message_id == SPLIT_OPPORTU) {
+
+				MPI_Recv(MPI_BOTTOM,0,MPI_INT,source,message_id,MPI_COMM_WORLD,MPI_STATUS_IGNORE);
+				mutex_unlock(&lock_mpi);
+
+				has_idle_host = 1;
+
+
 			} else {
 				mutex_unlock(&lock_mpi);
 			}
@@ -819,7 +840,11 @@ bool host_t::idle_host_exist()
 	//	return true;
 	//}
 	//return false;
-	return true;
+
+	if (has_idle_host  > 0) {
+		return true;
+	}
+	return false;
 }
 
 bool host_t::host_is_avaliable(int hid)
@@ -1263,6 +1288,9 @@ bool host_t::try_split(const position_t *p, int ply, int depth, uint64 &nodes,
 	}
 
 
+	// ok to have a split try
+	has_idle_host = 0;
+
 	// ask manager for idle host?
 	//bool idle_host_exist = false;
 	ISend(manager_id, TRY_SPLIT);
@@ -1343,6 +1371,7 @@ bool host_t::cluster_split(const position_t *p, search_stack_t *sstck, int ply,
 
 void host_t::main_host_work()
 {
+/*
 	position_t main_pos;
 	split_point_t some_sp;
 	int depth;
@@ -1428,9 +1457,146 @@ void host_t::main_host_work()
 	}
 
 	fclose(logfp);
+*/
+	position_t main_pos;
+	split_point_t some_sp;
+	int depth;
+	int t1, t2;
+	
+	//char fenstr[256];
+	char fen[256], turn[16], castle[16], epsq[16], n1[8], n2[8];
+	uint64 result;
 
+	FILE* logfp;
+	logfp = fopen("result.txt", "w");
+
+
+	//while (1) {
+	
+		// input
+		//scanf("%s%s%s%s%s%s", fen, turn, castle, epsq, n1, n2);
+		char fenstr[256] = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+
+		//scanf("%d", &depth);
+		depth = 7;
+		//sprintf(fenstr, "%s %s %s %s %s %s", fen, turn, castle, epsq, n1, n2);
+
+		set_position(&main_pos, fenstr);
+
+		cout << "Perft for the following position:" << endl;
+		cout << fenstr << endl;
+
+		// run parallel search
+		t1 = get_time();
+		status = HOST_RUNNING; // check status
+
+		// Tell manager that I am working ============================================
+		update_message_t running_msg;
+		running_msg.host_id = host_id;
+		running_msg.new_host_status = HOST_RUNNING;
+		ISend(manager_id, STATUS, (void*)(&running_msg), sizeof(update_message_t));
+		// ===========================================================================
+
+		result = cluster_perft(some_sp, main_pos, depth);
+		t2 = get_time();
+
+		// Tell manager that I am done== ===========================================
+		update_message_t idle_msg;
+		idle_msg.host_id = host_id;
+		idle_msg.new_host_status = HOST_IDLE;
+		ISend(manager_id, STATUS, (void*)(&idle_msg), sizeof(update_message_t));
+		// =========================================================================
+
+
+		cout << "[" << host_id << "] searched nodes = " << total_searched_nodes << endl;
+
+		printf("======== Performance Testing depth = %d ========\n", depth);
+		printf(" position: %s\n", fen);
+		printf(" perft = %llu\n", result);
+		printf(" time cost (ms) = %d\n", (t2 - t1));
+		//printf(" nodes/second = %d\n", (result / ((t2 - t1) / 1000)));
+		printf("-------- Performance Testing depth = %d --------\n", depth);
+
+		////////////////////
+		// output to file
+		fprintf(logfp, "======== Performance Testing depth = %d ========\n", depth);
+		fprintf(logfp, " position: %s\n", fen);
+		fprintf(logfp, " perft = %llu\n", result);
+		fprintf(logfp, " time cost (ms) = %d\n", (t2 - t1));
+		//printf(" nodes/second = %d\n", (result / ((t2 - t1) / 1000)));
+		fprintf(logfp, "-------- Performance Testing depth = %d --------\n", depth);
+
+
+		// quit
+		if (true) {
+
+			cout << "[" << host_id << "] searched nodes = " << total_searched_nodes << endl;
+			cout << "[" << host_id << "] split cnt = " << global_sp_id << endl;
+			cout << "[" << host_id << "] max_sp_stack_top = " << max_sp_stack_top << endl;
+
+			for (int other = 0; other < (n_host + 1); other++) {
+				if (other != host_id) {
+					ISend(other, QUIT); // quit!
+				}
+			}
+
+			//break;
+		}
+
+
+	//}
+
+	fclose(logfp);
 }
 
+
+int host_t::check_split_opportunity() {
+
+	int flag;
+	int n_message = 0;
+
+	uint64_t temp_result = 0ULL; // the temporal result
+
+	do {
+		//Polling. MPI_Iprobe<->MPI_Recv is not thread safe.
+		mutex_lock(&lock_mpi);
+		MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &flag, &mpi_status);
+		//MPI_Iprobe(source, MPI_ANY_TAG, MPI_COMM_WORLD, &flag, &mpi_status);
+
+
+		// Message recieved?
+		if (flag) {
+
+			int message_id = mpi_status.MPI_TAG;
+			int source = mpi_status.MPI_SOURCE;
+
+			// write this to log file
+			logf << "chck Receive: " << get_time() << " " << MSG_NAME[message_id] << endl;
+
+			if (message_id == SPLIT_OPPORTU) {
+
+				MPI_Recv(MPI_BOTTOM,0,MPI_INT,source,message_id,MPI_COMM_WORLD,MPI_STATUS_IGNORE);
+				mutex_unlock(&lock_mpi);
+
+				has_idle_host = 1;
+
+			} else {
+				mutex_unlock(&lock_mpi);
+
+				break; // other messages
+			}
+
+			// number of
+			n_message++;
+
+		} else {
+			mutex_unlock(&lock_mpi);
+		}
+
+	} while(flag);
+
+	return n_message;
+}
 
 
 uint64 host_t::cluster_perft(split_point_t &sp, position_t &pos, int depth)
@@ -1440,7 +1606,7 @@ uint64 host_t::cluster_perft(split_point_t &sp, position_t &pos, int depth)
 	move_t legal_move[256];
 	undo_info_t u[1];
 	int n_msg, ply, n_legalmv;
-	int n_moves, nmv, i, check;
+	int n_moves, nmv, i, check, tried_moves, nleft;
 	int cap = 0, ep = 0, prom = 0, castle = 0;
 	int pmv, knmv, bmv, rmv, qmv, kmv, piece;
 	uint64 nodes = 0;
@@ -1464,6 +1630,7 @@ uint64 host_t::cluster_perft(split_point_t &sp, position_t &pos, int depth)
 	since_last_nodes++;
 	//if (since_last_nodes > poll_peroid_nodes) {
 	//n_msg = check_message(sp);
+	n_msg = check_split_opportunity();
 	since_last_nodes = 0;
 	// }
 	//cout << "2222222222222" << endl;
@@ -1483,7 +1650,7 @@ uint64 host_t::cluster_perft(split_point_t &sp, position_t &pos, int depth)
 	//position_to_fen(&pos, currentfen);
 
 	n_legalmv = 0;
-	nmv = 0;
+	nmv = 0; tried_moves = 0;
 	cap = 0; ep = 0; prom = 0; castle = 0;
 	pmv = 0; knmv = 0; bmv = 0; rmv = 0; qmv = 0; kmv = 0;
 	for (i = 0; i < n_moves; i++) {
@@ -1512,11 +1679,14 @@ uint64 host_t::cluster_perft(split_point_t &sp, position_t &pos, int depth)
 			nodes += cluster_perft(sp, pos, depth - 1);
 			unmake_move(&pos, move, u);
 		}
+		tried_moves++;
+
+		nleft = n_moves - tried_moves;
 
 		// try split
 		if (n_host > 1 &&
-			n_moves >= 3 &&
-			depth >= 4 &&
+			nleft >= 3 && //n_moves >= 3 &&
+			depth >= 5 &&
 			idle_host_exist()) {
 			if (try_split(&pos, ply, depth, nodes, legal_move, mstack, (mstack + i + 1), msend, host_id)) {
 				break;

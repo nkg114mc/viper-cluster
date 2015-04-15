@@ -54,8 +54,8 @@ public:
 	MPI_Request mpi_request;
 
 	// some local data
-	split_point_t sp_stack[8][8];
-	int sp_stack_top[8];
+	split_point_t sp_stack[MAX_SPLIT_HOST][MaxActiveSplitPoints];
+	int sp_stack_top[MAX_SPLIT_HOST];
 
 	// about status
 	int all_status[MAX_SPLIT_HOST];

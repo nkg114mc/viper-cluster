@@ -20,7 +20,7 @@
 //// manager_t
 ////
 
-int max_stck[16];
+int max_stck[MAX_SPLIT_HOST];
 
 // construction function
 manager_t::manager_t(host_option_t &option)
@@ -174,6 +174,10 @@ void manager_t::manager_idle_loop() {
 								init_msg.master_id = master;
 								init_msg.stack_top = stck_top;
 								init_msg.sp_id = (sp_pointer->sp_id);
+
+								// set the slave host in "RUNNING" status
+								all_status[i] = HOST_RUNNING; // set it running before it is really running
+
 								ISend(i, INIT, (void*)(&init_msg), sizeof(init_message_t));
 							}
 						}
@@ -323,8 +327,13 @@ void manager_t::manager_idle_loop() {
 							}
 
 
-						} else {
-							ISend(source, CANCEL); // idle master
+						} else { // not done yet, other cpus is still working
+
+							if (source == master) {
+								// ISend(source, CANCEL); // idle master, might be used as helpful master
+							} else {
+								ISend(source, CANCEL); // slave is free, and is avaliable to help others
+							}
 						}
 					}
 
@@ -339,10 +348,19 @@ void manager_t::manager_idle_loop() {
 					all_status[source] = update_msg.new_host_status; //
 					if (all_status[source] == HOST_IDLE) {
 						all_master[source] = -1; // I have no master now
-					} else if (all_status[source] == HOST_RUNNING) {
-						if (all_master[source] == host_id) {
-							assert(all_master[source] >= 0); //
+
+						// tell others that there are some idle host, and a split might be allowed
+						for (i = 0; i < n_host; i++) {
+							if ((i != source) &&
+								(all_status[i] == HOST_RUNNING)) {
+								ISend(i, SPLIT_OPPORTU);
+							}
 						}
+
+					} else if (all_status[source] == HOST_RUNNING) {
+						//if (all_master[source] == host_id) {
+						//	assert(all_master[source] >= 0); //
+						//}
 					}
 
 					print_status_table(all_status);
@@ -353,8 +371,9 @@ void manager_t::manager_idle_loop() {
 
 					mutex_unlock(&lock_mpi);
 
+					usleep(5000 * host_id);
 					for (i = 0; i < n_host; i++ ) {
-						cout << "max_sp_stack_top = " << max_stck[i] << endl;
+						cout << "["<< host_id << "] max_sp_stack_top = " << max_stck[i] << endl;
 					}
 
 					host_should_stop = true;
@@ -379,6 +398,7 @@ void manager_t::manager_idle_loop() {
 		if (host_should_stop) {
 			break;
 		}
+
 
 	}
 

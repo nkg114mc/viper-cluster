@@ -6,11 +6,17 @@
 
 #define USE_CLUSTER_SEARCH
 
-#if defined(SMP)
-const int MaxNumOfThreads = 4;
-#else
-const int MaxNumOfThreads = 8;
-#endif
+
+#define MAX_SPLIT_THREAD 8
+#define MAX_SPLIT_HOST   32
+
+#define MaxActiveSplitPoints 8
+
+//#if defined(SMP)
+//const int MaxNumOfThreads = 4;
+//#else
+const int MaxNumOfThreads = MAX_SPLIT_HOST;
+//#endif
 
 
 ////
@@ -449,13 +455,11 @@ public:
 	search_task_t task_arr[256];
 	int queue_tail, current_head;
 
-
 	void pop_head(search_task_t &task);
 	void add_tail(search_task_t &task);
 	void get_tail(search_task_t &task);
 
 	bool is_empty();
-
 	void clear();
 
 };
@@ -474,7 +478,7 @@ struct split_point_t {
   volatile uint64 nodes;
   volatile int alpha, beta, bestvalue;
   bool pvnode;
-  int master, slaves[MaxNumOfThreads];
+  int master, slaves[MAX_SPLIT_HOST];//slaves[MaxNumOfThreads];
   mutex_t lock[1];
   move_stack_t *current, *end;
   volatile int moves;
@@ -496,6 +500,7 @@ struct thread_t {
   volatile bool print_currline;
 };
 
+/*
 class move_statistic_t {
 public:
 	int cap;
@@ -509,6 +514,7 @@ public:
 		castle = 0;
 	}
 };
+*/
 
 ////
 //// Global variables
@@ -715,7 +721,7 @@ extern void init_piece_counts(position_t *pos);
 extern void position_to_fen(const position_t *pos, char *fen);
 
 extern thread_t Threads[MaxNumOfThreads];
-extern const int MaxActiveSplitPoints;
+//extern const int MaxActiveSplitPoints;
 
 #if defined(SMP)
 extern mutex_t SMPLock[1], IOLock[1], WaitLock[1];
