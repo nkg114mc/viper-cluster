@@ -1475,12 +1475,13 @@ void host_t::main_host_work()
 	
 		// input
 		//scanf("%s%s%s%s%s%s", fen, turn, castle, epsq, n1, n2);
-		char fenstr[256] = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
-
 		//scanf("%d", &depth);
+
+		char fenstr[256] = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 		depth = 7;
 		//sprintf(fenstr, "%s %s %s %s %s %s", fen, turn, castle, epsq, n1, n2);
 
+		strcpy(fen, fenstr);
 		set_position(&main_pos, fenstr);
 
 		cout << "Perft for the following position:" << endl;
