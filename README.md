@@ -32,8 +32,8 @@ To run perft, cd to the directory where file **viper** is located. Then type fol
 
 	mpiexec -np <Number-of-Processes> ./viper
 
-where <Number-of-Processes> is just the number of processes (hosts) you want.
-**Note** that, Viper-Cluster is using centralized controlling (master-slave architecture). If the processes are indexed from 0 to (<Number-of-Processes> - 1), then the last process, indexed by <Number-of-Processes> - 1, will just do management, no computing. Thus, if you setup N processes, only N - 1 are worker processes that do perft computing. And, if you want N' computing workers, remember to set <Number-of-Processes> be N' + 1.
+where _Number-of-Processes_ is just the number of processes (hosts) you want.
+**Note** that, Viper-Cluster is using centralized controlling (master-slave architecture). If the processes are indexed from 0 to (_Number-of-Processes_ - 1), then the last process, indexed by _Number-of-Processes_ - 1, will just do management, no computing. Thus, if you setup N processes, only N - 1 are worker processes that do perft computing. And, if you want N' computing workers, remember to set _Number-of-Processes_ be N' + 1.
 
 When the perft finished, it will generate a file named "result.txt", which shows the perft result. Each process will also print a brief summary on the screen about how many nodes were searched, and a more detailed log named "host-i.log", where i is the process index. For example, when using the default input position and depth, the result would be like:
 
